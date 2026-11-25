@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amtrak Arrival Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: calm station departure board, glanceable from across a room
+   IDEA: the big arrival board at the platform
+   PICTURE: one huge expected-arrival time + countdown, then the stop strip
+   COLOUR/TYPE: board black, white figures, green/red for early/late; Hanken Grotesk
+   LAYOUT: controls, board, stop list; single column under 600px */
+:root{color-scheme:light dark;
+  --bg:light-dark(#f4f4f1,#0e1013);--card:light-dark(#ffffff,#171a1f);
+  --ink:light-dark(#15171a,#f1f2f3);--mute:light-dark(#5d636b,#9aa1ab);
+  --line:light-dark(#dcddd8,#2a2f36);--board:#0e1013;--bink:#f6f6f2;
+  --ok:#1fa75a;--late:#e0413a;--warn:#e8a317;--accent:#2f6fde}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Hanken Grotesk",system-ui,sans-serif;overflow-x:clip}
+.wrap{max-width:860px;margin:0 auto;padding:clamp(16px,4vw,40px) max(4vw,14px)}
+h1{font-size:clamp(24px,5vw,34px);line-height:1.1;margin:0 0 14px;font-weight:700;text-wrap:balance}
+form{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-bottom:18px}
+label{display:flex;flex-direction:column;font-size:13px;color:var(--mute);gap:4px}
+input{font:inherit;font-size:17px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);width:8.5em;min-height:44px;text-transform:uppercase}
+button{font:inherit;font-weight:600;min-height:44px;padding:0 18px;border-radius:10px;border:0;background:var(--accent);color:#fff;cursor:pointer}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.board{background:var(--board);color:var(--bink);border-radius:18px;padding:clamp(18px,4vw,32px);box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.route{font-size:15px;color:#b9bec6;display:flex;flex-wrap:wrap;gap:4px 14px}
+.route b{color:var(--bink)}
+.big{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:18px;margin-top:18px;align-items:end}
+.lbl{font-size:14px;color:#9aa1ab}
+.time{font-size:clamp(52px,13vw,96px);font-weight:300;line-height:1;letter-spacing:-.02em;white-space:nowrap}
+.cd{font-size:clamp(26px,6vw,40px);font-weight:600;line-height:1.1;white-space:nowrap}
+.pill{display:inline-block;padding:4px 12px;border-radius:99px;font-weight:700;font-size:15px;margin-top:10px;white-space:nowrap}
+.ok{background:var(--ok);color:#fff}.late{background:var(--late);color:#fff}.warn{background:var(--warn);color:#111}.neutral{background:#3a4049;color:#fff}
+.meta{margin-top:18px;padding-top:14px;border-top:1px solid #2a2f36;font-size:14px;color:#b9bec6;display:flex;flex-wrap:wrap;gap:4px 18px}
+.msg{padding:22px;border-radius:14px;background:var(--card);border:1px solid var(--line)}
+.msg h2{margin:0 0 6px;font-size:20px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}
+.chips button{min-height:36px;padding:0 12px;font-size:14px}
+.chips button[aria-pressed=true]{background:var(--bink);color:var(--board)}
+h3{font-size:18px;margin:28px 0 8px}
+table{width:100%;border-collapse:collapse;background:var(--card);border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);font-size:15px}
+th{font-size:13px;color:var(--mute);font-weight:600}
+td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.past td{color:var(--mute)}
+tr.here td{background:light-dark(#eaf1ff,#1b2638);font-weight:700}
+tr.next td:first-child::before{content:"▸ ";color:var(--accent)}
+.d{font-size:13px;font-weight:700}.d.ok,.d.late,.d.warn,.d.neutral{background:none}.d.ok{color:var(--ok)}.d.late{color:var(--late)}.d.warn{color:#c47f00}.d.neutral{color:var(--mute)}
+footer{margin-top:24px;font-size:13px;color:var(--mute)}
+footer a{color:inherit}
+@media(max-width:600px){.big{grid-template-columns:1fr}
+  table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:8px;border-bottom:1px solid var(--line)}
+  .stack td{display:flow-root;border:0;padding:2px 12px 2px 8.5em;text-align:start}
+  .stack td::before{content:attr(data-l);float:left;width:7.5em;margin-left:-7.5em;color:var(--mute);font-weight:400}
+  tr.next td:first-child::before{content:attr(data-l)}
+  .stack td:empty{display:none}}
+@media(prefers-reduced-motion:no-preference){.tick{animation:pulse 1s ease-in-out infinite alternate}@keyframes pulse{from{opacity:1}to{opacity:.35}}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>When does my train get in?</h1>
+  <form id="f">
+    <label>Train #<input id="train" inputmode="numeric" autocomplete="off" value="2159"></label>
+    <label>Station code<input id="stn" autocomplete="off" maxlength="4" value="WAS"></label>
+    <button type="submit">Track</button>
+    <button type="button" class="ghost" id="refresh">Refresh</button>
+  </form>
+  <div id="out"><div class="msg">Loading…</div></div>
+  <div id="stops"></div>
+  <footer>
+    Live data from Amtrak's Track Your Train feed via <a href="https://amtraker.com" target="_blank" rel="noopener">Amtraker</a>.
+    Updates every 60 s. Estimates are Amtrak's own and can shift. <span id="upd"></span>
+  </footer>
+</div>
+<script>
+{
+const API = n => `https://api-v3.amtraker.com/v3/trains/${encodeURIComponent(n)}`;
+const PROXY = n => `proxy.php?train=${encodeURIComponent(n)}`;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let state = {train:null, stn:null, data:null, pick:null, fetchedAt:null};
+let refreshTimer = null;
+
+// Inputs: query string > saved > defaults
+const qs = new URLSearchParams(location.search);
+try {
+  const saved = JSON.parse(localStorage.getItem('amtk-track') || '{}');
+  if (!qs.get('train') && saved.train) $('train').value = saved.train;
+  if (!qs.get('station') && saved.stn) $('stn').value = saved.stn;
+} catch (e) {}
+if (qs.get('train')) $('train').value = qs.get('train');
+if (qs.get('station')) $('stn').value = qs.get('station');
+
+const fmtTime = (iso, tz) => iso ? new Date(iso).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', timeZone: tz || undefined}) : '—';
+const fmtDay = (iso, tz) => iso ? new Date(iso).toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric', timeZone: tz || undefined}) : '';
+const mins = (a, b) => Math.round((new Date(a) - new Date(b)) / 60000);
+function deltaText(m) {
+  if (m == null || isNaN(m)) return {t:'No estimate', c:'neutral'};
+  if (Math.abs(m) <= 1) return {t:'On time', c:'ok'};
+  if (m < 0) return {t:`${-m} min early`, c:'ok'};
+  return {t:`${m} min late`, c: m >= 15 ? 'late' : 'warn'};
+}
+function dur(ms) {
+  const neg = ms < 0; ms = Math.abs(ms);
+  const h = Math.floor(ms / 3600000), m = Math.floor(ms % 3600000 / 60000), s = Math.floor(ms % 60000 / 1000);
+  const str = h ? `${h}h ${m}m` : m ? `${m}m ${String(s).padStart(2,'0')}s` : `${s}s`;
+  return neg ? `${str} ago` : `in ${str}`;
+}
+
+async function getJSON(url) {
+  const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 12000);
+  try {
+    const r = await fetch(url, {signal: ac.signal, cache: 'no-store'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+async function load(n) {
+  try { return await getJSON(API(n)); }
+  catch (e) {
+    try { return await getJSON(PROXY(n)); }   // only works if proxy.php is hosted next to this page
+    catch (e2) { throw e; }
+  }
+}
+
+function choose(list, stn) {
+  const withStn = list.filter(t => (t.stations || []).some(s => s.code === stn));
+  const pool = withStn.length ? withStn : list;
+  const rank = t => t.trainState === 'Completed' ? 1 : 0;
+  return [...pool].sort((a, b) => rank(a) - rank(b) || new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0];
+}
+
+async function track() {
+  const n = $('train').value.trim().replace(/\D/g, '');
+  const stn = $('stn').value.trim().toUpperCase();
+  if (!n || !stn) return;
+  try { localStorage.setItem('amtk-track', JSON.stringify({train:n, stn})); } catch (e) {}
+  try { history.replaceState(null, '', `?train=${n}&station=${stn}`); } catch (e) {}
+  if (state.train !== n || state.stn !== stn) state.pick = null;
+  state.train = n; state.stn = stn;
+  try {
+    const raw = await load(n);
+    const list = Array.isArray(raw) ? [] : (raw[n] || Object.values(raw)[0] || []);
+    state.data = list; state.fetchedAt = new Date(); state.err = null;
+    if (!state.pick || !list.some(t => t.trainID === state.pick)) state.pick = list.length ? choose(list, stn).trainID : null;
+  } catch (e) {
+    state.err = e;
+  }
+  render();
+}
+
+function render() {
+  const {train: n, stn, data, err} = state;
+  const out = $('out'), stops = $('stops');
+  if (err && !data) {
+    out.innerHTML = `<div class="msg"><h2>Couldn't reach the live feed</h2>
+      <p>${esc(err.message || err)}. If you opened this page from a host that blocks outside requests, put <code>proxy.php</code> next to it (or open the file directly in a browser).</p></div>`;
+    stops.innerHTML = ''; return;
+  }
+  if (!data) return;
+  if (!data.length) {
+    out.innerHTML = `<div class="msg"><h2>Train ${esc(n)} isn't in Amtrak's live feed right now</h2>
+      <p>Trains usually show up shortly before they leave their first station and drop off a while after they arrive.
+      It may not have started yet, may not run today, or may be cancelled. This page will keep checking every minute.</p></div>`;
+    stops.innerHTML = ''; return;
+  }
+  const t = data.find(x => x.trainID === state.pick) || data[0];
+  const s = (t.stations || []).find(x => x.code === stn);
+  const chips = data.length > 1 ? `<div class="chips">${data.map(x =>
+    `<button type="button" data-id="${esc(x.trainID)}" aria-pressed="${x.trainID === t.trainID}">${esc(fmtDay(x.stations?.[0]?.schDep, x.originTZ))} · ${esc(x.trainState)}</button>`).join('')}</div>` : '';
+  const head = `<div class="route"><span><b>${esc(t.routeName)} ${esc(t.trainNum)}</b></span>
+      <span>${esc(t.origName)} → ${esc(t.destName)}</span><span>${esc(t.trainState)}</span></div>`;
+
+  let main;
+  if (!s) {
+    main = `<div class="big"><div><div class="lbl">Station</div><div class="cd">${esc(stn)} isn't a stop on this train</div></div></div>`;
+  } else {
+    const isDest = s.code === t.destCode;
+    const done = s.status === 'Departed' || (isDest && s.status === 'Station');
+    const at = s.status === 'Station';
+    const est = s.arr || s.dep, sch = s.schArr || s.schDep;
+    const d = deltaText(est && sch ? mins(est, sch) : null);
+    const verb = at ? (isDest ? 'Arrived' : 'At platform now') : done ? (isDest ? 'Arrived' : 'Departed') : 'Expected arrival';
+    const shown = done && !isDest && s.dep ? s.dep : est;
+    main = `<div class="big">
+      <div><div class="lbl">${verb} · ${esc(s.name)} (${esc(s.code)})</div>
+        <div class="time">${esc(fmtTime(shown, s.tz))}</div>
+        <span class="pill ${d.c}">${esc(d.t)}</span></div>
+      <div><div class="lbl">Scheduled ${esc(fmtTime(sch, s.tz))}${s.platform ? ` · Track ${esc(s.platform)}` : ''}</div>
+        <div class="cd" id="cd" data-at="${esc(est || '')}" data-done="${done || at ? 1 : 0}"></div></div>
+    </div>`;
+  }
+  const last = t.eventName ? `Last reported at <b>${esc(t.eventName)}</b>` : '';
+  const spd = t.velocity > 1 ? `${Math.round(t.velocity)} mph ${esc(t.heading || '')}` : '';
+  const seen = t.lastValTS ? `GPS ping ${esc(fmtTime(t.lastValTS, t.eventTZ))}` : '';
+  const alerts = (t.alerts || []).map(a => `<div>⚠ ${esc(a.message || a)}</div>`).join('');
+  out.innerHTML = `<div class="board">${head}${main}
+    <div class="meta">${[last, spd, seen].filter(Boolean).map(x => `<span>${x}</span>`).join('')}${alerts}</div></div>${chips}`;
+
+  const list = t.stations || [];
+  const nextIdx = list.findIndex(x => x.status === 'Enroute');
+  stops.innerHTML = `<h3>All stops</h3><table class="stack"><thead><tr><th>Station</th><th>Scheduled</th><th>Actual / est.</th><th>Status</th></tr></thead><tbody>${
+    list.map((x, i) => {
+      const est = x.status === 'Departed' ? (x.dep || x.arr) : (x.arr || x.dep);
+      const sch = x.status === 'Departed' ? (x.schDep || x.schArr) : (x.schArr || x.schDep);
+      const d = est && sch ? deltaText(mins(est, sch)) : null;
+      const cls = [x.status === 'Departed' ? 'past' : '', x.code === stn ? 'here' : '', i === nextIdx ? 'next' : ''].join(' ');
+      return `<tr class="${cls}"><td data-l="Station">${esc(x.name)} (${esc(x.code)})</td><td class="n" data-l="Scheduled">${esc(fmtTime(sch, x.tz))}</td>
+        <td class="n" data-l="Actual / est.">${esc(fmtTime(est, x.tz))}</td>
+        <td data-l="Status">${esc(x.status === 'Enroute' ? 'Upcoming' : x.status === 'Station' ? 'At station' : x.status)}${d ? ` <span class="d ${d.c}">${esc(d.t)}</span>` : ''}</td></tr>`;
+    }).join('')}</tbody></table>`;
+  tick();
+}
+
+function tick() {
+  const cd = $('cd');
+  if (cd) {
+    const at = cd.dataset.at;
+    if (!at) cd.textContent = '';
+    else if (cd.dataset.done === '1') cd.textContent = dur(new Date(at) - Date.now());
+    else { const ms = new Date(at) - Date.now(); cd.textContent = ms > 0 ? dur(ms) : 'Any moment'; }
+  }
+  if (state.fetchedAt) {
+    const s = Math.round((Date.now() - state.fetchedAt) / 1000);
+    $('upd').innerHTML = `Checked ${s < 5 ? 'just now' : s + ' s ago'}${state.err ? ' (last refresh failed, retrying)' : ''} <span class="tick">●</span>`;
+  }
+}
+
+$('f').addEventListener('submit', e => { e.preventDefault(); track(); });
+$('refresh').addEventListener('click', track);
+$('out').addEventListener('click', e => {
+  const b = e.target.closest('button[data-id]'); if (!b) return;
+  state.pick = b.dataset.id; render();
+});
+setInterval(tick, 1000);
+refreshTimer = setInterval(() => { if (!document.hidden) track(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) track(); });
+track();
+}
+</script>
+</body>
+</html>
