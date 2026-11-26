@@ -87,22 +87,15 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 let state = {train:null, stn:null, data:null, pick:null, fetchedAt:null};
 let refreshTimer = null;
 
-// Inputs: last tracked train/station, unless the page was opened from a new link.
-// A link we've already seen (e.g. a bookmark) doesn't override what you tracked since.
+// Inputs: query string > saved > defaults
 const qs = new URLSearchParams(location.search);
-const link = qs.get('train') || qs.get('station') ? `${qs.get('train') || ''}|${(qs.get('station') || '').toUpperCase()}` : '';
-let saved = {};
-try { saved = JSON.parse(localStorage.getItem('amtk-track') || '{}') || {}; } catch (e) {}
-const useLink = link && link !== saved.link;
-if (useLink) {
-  if (qs.get('train')) $('train').value = qs.get('train');
-  if (qs.get('station')) $('stn').value = qs.get('station');
-} else {
-  if (saved.train) $('train').value = saved.train;
-  if (saved.stn) $('stn').value = saved.stn;
-}
-// Remember this link as seen, so reopening it brings back your last train instead
-if (link) { saved.link = link; try { localStorage.setItem('amtk-track', JSON.stringify(saved)); } catch (e) {} }
+try {
+  const saved = JSON.parse(localStorage.getItem('amtk-track') || '{}');
+  if (!qs.get('train') && saved.train) $('train').value = saved.train;
+  if (!qs.get('station') && saved.stn) $('stn').value = saved.stn;
+} catch (e) {}
+if (qs.get('train')) $('train').value = qs.get('train');
+if (qs.get('station')) $('stn').value = qs.get('station');
 
 const fmtTime = (iso, tz) => iso ? new Date(iso).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', timeZone: tz || undefined}) : '—';
 const fmtDay = (iso, tz) => iso ? new Date(iso).toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric', timeZone: tz || undefined}) : '';
@@ -147,8 +140,7 @@ async function track() {
   const n = $('train').value.trim().replace(/\D/g, '');
   const stn = $('stn').value.trim().toUpperCase();
   if (!n || !stn) return;
-  saved = {...saved, train: n, stn};
-  try { localStorage.setItem('amtk-track', JSON.stringify(saved)); } catch (e) {}
+  try { localStorage.setItem('amtk-track', JSON.stringify({train:n, stn})); } catch (e) {}
   try { history.replaceState(null, '', `?train=${n}&station=${stn}`); } catch (e) {}
   if (state.train !== n || state.stn !== stn) state.pick = null;
   state.train = n; state.stn = stn;

@@ -7,7 +7,6 @@ A single-page tracker that shows when an Amtrak train is expected to arrive at a
 ## Use
 - Enter a train number and a station code (e.g. `WAS`, `NYP`, `BOS`), then tap **Track**.
 - It refreshes every 60 seconds. You can bookmark a train with `?train=NUMBER&station=CODE`.
-- It remembers the last train and station you tracked (in this browser) and loads them next time, even if you reopen a link or bookmark you've used before. A link you haven't opened before still loads its own train.
 
 ## Files
 - `index.html`: the whole app (HTML/CSS/JS, no build step).
