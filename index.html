@@ -27,6 +27,9 @@ input{font:inherit;font-size:17px;padding:10px 12px;border:1px solid var(--line)
 button{font:inherit;font-weight:600;min-height:44px;padding:0 18px;border-radius:10px;border:0;background:var(--accent);color:#fff;cursor:pointer}
 button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.share{display:flex;gap:8px;align-items:center;margin:0 0 18px}
+.share input{flex:1;width:auto;font-size:14px;min-height:40px;padding:8px 12px;text-transform:none;color:var(--mute);text-overflow:ellipsis}
+.share button{min-height:40px;padding:0 14px;font-size:14px;flex:none}
 .board{background:var(--board);color:var(--bink);border-radius:18px;padding:clamp(18px,4vw,32px);box-shadow:0 10px 30px rgba(0,0,0,.18)}
 .route{font-size:15px;color:#b9bec6;display:flex;flex-wrap:wrap;gap:4px 14px}
 .route b{color:var(--bink)}
@@ -64,6 +67,11 @@ footer a{color:inherit}
 </head>
 <body>
 <div class="wrap">
+  <div class="share">
+    <input id="link" readonly aria-label="Link to this train and station">
+    <button type="button" class="ghost" id="copy">Copy</button>
+    <button type="button" id="share" hidden>Share</button>
+  </div>
   <h1>When does my train get in?</h1>
   <form id="f">
     <label>Train #<input id="train" inputmode="numeric" autocomplete="off" value="2159"></label>
@@ -231,6 +239,35 @@ function tick() {
     $('upd').innerHTML = `Checked ${s < 5 ? 'just now' : s + ' s ago'}${state.err ? ' (last refresh failed, retrying)' : ''} <span class="tick">●</span>`;
   }
 }
+
+// Shareable link: kept in sync with the input boxes as you type
+const linkFor = () => {
+  const n = $('train').value.trim().replace(/\D/g, ''), stn = $('stn').value.trim().toUpperCase();
+  const q = new URLSearchParams(); if (n) q.set('train', n); if (stn) q.set('station', stn);
+  return location.origin + location.pathname + (q.toString() ? '?' + q : '');
+};
+function syncLink() {
+  const url = linkFor();
+  $('link').value = url;
+  try { history.replaceState(null, '', url); } catch (e) {}
+}
+$('train').addEventListener('input', syncLink);
+$('stn').addEventListener('input', syncLink);
+$('link').addEventListener('focus', e => e.target.select());
+$('copy').addEventListener('click', async () => {
+  const b = $('copy');
+  try { await navigator.clipboard.writeText(linkFor()); }
+  catch (e) { $('link').select(); try { document.execCommand('copy'); } catch (e2) {} }
+  b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy', 1500);
+});
+if (navigator.share) {
+  $('share').hidden = false;
+  $('share').addEventListener('click', () => {
+    const n = $('train').value.trim(), stn = $('stn').value.trim().toUpperCase();
+    navigator.share({title: `Amtrak ${n} at ${stn}`, url: linkFor()}).catch(() => {});
+  });
+}
+syncLink();
 
 $('f').addEventListener('submit', e => { e.preventDefault(); track(); });
 $('refresh').addEventListener('click', track);
